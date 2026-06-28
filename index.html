@@ -176,6 +176,8 @@ tr:hover td{background:rgba(82,196,122,0.04)}
 .pd-btn-secondary:hover{background:var(--pd-bg3)}
 .pd-btn-danger{background:var(--pd-red-dim);color:var(--pd-red);border-color:rgba(224,92,92,0.25)}
 .pd-btn-wa{background:var(--pd-verde-dim);color:var(--pd-verde);border-color:var(--pd-border2)}
+.pd-btn-drive{background:rgba(66,133,244,0.1);color:#6BA3F5;border-color:rgba(66,133,244,0.25);text-decoration:none;display:inline-flex;align-items:center;gap:0.3rem}
+.pd-btn-drive:hover{background:rgba(66,133,244,0.18)}
 
 /* STATS */
 .pd-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:0.6rem;margin-bottom:1rem}
@@ -326,7 +328,6 @@ tr:hover td{background:rgba(82,196,122,0.04)}
   #perfil-dark .pd-header{order:0}
   #perfil-dark .pd-stats{order:1}
   #perfil-dark .pd-grid{display:flex;flex-direction:column}
-  #perfil-dark .pd-grid .pd-card{width:100%}
 
   /* Cards de la columna lateral (.pd-side) y la principal reordenadas */
   .pd-side{display:contents}
@@ -531,6 +532,7 @@ tr:hover td{background:rgba(82,196,122,0.04)}
           </div>
           <div class="pd-header-btns">
             <button id="perfil-btn-whatsapp" class="pd-btn pd-btn-wa" style="display:none">WhatsApp</button>
+            <a id="perfil-btn-drive" class="pd-btn pd-btn-drive" target="_blank" rel="noopener" style="display:none">📁 Plan</a>
             <button id="perfil-btn-editar" class="pd-btn pd-btn-secondary">Editar</button>
             <button id="perfil-btn-eliminar" class="pd-btn pd-btn-danger">Eliminar</button>
           </div>
@@ -765,6 +767,7 @@ tr:hover td{background:rgba(82,196,122,0.04)}
             <div class="field"><label>Peso inicial (kg)</label><input type="number" id="a-pesoInicial" placeholder="75"/></div>
             <div class="field"><label>Peso actual (kg)</label><input type="number" id="a-pesoActual" placeholder="72"/></div>
           </div>
+          <div class="field" style="margin-top:0.75rem"><label>Carpeta Drive (URL)</label><input type="url" id="a-carpetaDrive" placeholder="https://drive.google.com/drive/folders/..."/></div>
         </div>
       </div>
     </div>
@@ -787,8 +790,8 @@ const SCOPES      = 'https://www.googleapis.com/auth/spreadsheets https://www.go
 
 // CAL-07: Rangos de hojas centralizados — modificar aquí si cambia la estructura
 const RANGO = {
-  ALUMNOS_READ:        'Alumnos!A2:P1000',
-  ALUMNOS_WRITE:       'Alumnos!A2:P1000',
+  ALUMNOS_READ:        'Alumnos!A2:Q1000',
+  ALUMNOS_WRITE:       'Alumnos!A2:Q1000',
   ALUMNOS_START:       'Alumnos!A2',
   COBROS_READ:         'Cobros!A2:F1000',
   COBROS_WRITE:        'Cobros!A2:F1000',
@@ -968,6 +971,7 @@ async function cargarDatos(){
         pesoActual:   r[13]||'',
         historialFis: r[14]||'',
         tieneNutri:   r[15]||'no',
+        carpetaDrive: r[16]||'',
       })).filter(a=>a.id);
     }catch(e){console.warn('Error cargando Alumnos:',e);alumnos=[];}
 
@@ -1046,7 +1050,7 @@ async function guardarEnSheets(){
       a.id,a.nombre,a.horario,a.dias.join('|'),a.frecuencia,a.monto,
       a.objetivos,a.notas,a.estado,a.telefono||'',
       a.fechaNac||'',a.estatura||'',a.pesoInicial||'',a.pesoActual||'',
-      a.historialFis||'',a.tieneNutri||'no'
+      a.historialFis||'',a.tieneNutri||'no',a.carpetaDrive||''
     ]);
     await sheetsUpdate(RANGO.ALUMNOS_START,values);
   }
@@ -1211,7 +1215,7 @@ function renderTablaAlumnos(){
 function abrirModalAlumno(id=null){
   editandoId=id;
   document.getElementById('modal-titulo').textContent=id?'Editar alumno':'Nuevo alumno';
-  ['a-nombre','a-telefono','a-monto','a-objetivos','a-notas','a-fechaNac','a-estatura','a-pesoInicial','a-pesoActual'].forEach(f=>document.getElementById(f).value='');
+  ['a-nombre','a-telefono','a-monto','a-objetivos','a-notas','a-fechaNac','a-estatura','a-pesoInicial','a-pesoActual','a-carpetaDrive'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('a-frecuencia').value='2';
   document.getElementById('a-estado').value='activo';
   document.querySelectorAll('.dia-check-label').forEach(l=>l.classList.remove('checked'));
@@ -1230,6 +1234,7 @@ function abrirModalAlumno(id=null){
     document.getElementById('a-estatura').value=a.estatura||'';
     document.getElementById('a-pesoInicial').value=a.pesoInicial||'';
     document.getElementById('a-pesoActual').value=a.pesoActual||'';
+    document.getElementById('a-carpetaDrive').value=a.carpetaDrive||'';
     const hpd=stringToHorariosPorDia(a.horario);
     document.querySelectorAll('.dia-check-label').forEach(l=>{
       if(a.dias.includes(l.dataset.dia)) l.classList.add('checked');
@@ -1271,6 +1276,7 @@ async function guardarAlumno(){
     pesoActual: document.getElementById('a-pesoActual').value.trim(),
     historialFis: editandoId?(alumnos.find(x=>x.id===editandoId)||{}).historialFis||'':'',
     tieneNutri: editandoId?(alumnos.find(x=>x.id===editandoId)||{}).tieneNutri||'no':'no',
+    carpetaDrive: document.getElementById('a-carpetaDrive').value.trim(),
   };
   const btn=document.getElementById('btn-guardar-alumno');
   btn.innerHTML='<span class="loading"></span>Guardando...';
@@ -1333,6 +1339,15 @@ function verAlumno(id){
     waBtn.onclick=()=>window.open(`https://wa.me/54${a.telefono.replace(/\D/g,'')}`, '_blank');
   } else {
     waBtn.style.display='none';
+  }
+
+  // Drive btn
+  const driveBtn=document.getElementById('perfil-btn-drive');
+  if(a.carpetaDrive){
+    driveBtn.style.display='inline-flex';
+    driveBtn.href=a.carpetaDrive;
+  } else {
+    driveBtn.style.display='none';
   }
 
   // Botones
