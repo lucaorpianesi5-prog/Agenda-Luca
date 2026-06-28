@@ -1344,9 +1344,15 @@ function verAlumno(id){
   // Drive btn
   const driveBtn=document.getElementById('perfil-btn-drive');
   if(a.carpetaDrive){
-    const driveUrl=a.carpetaDrive.trim();
+    const driveUrl=a.carpetaDrive.trim().replace(/^["']+|["']+$/g,'');
+    console.log('[Drive btn] URL:', JSON.stringify(driveUrl));
     driveBtn.style.display='inline-flex';
-    driveBtn.onclick=(e)=>{e.preventDefault();window.open(driveUrl,'_blank','noopener');};
+    driveBtn.onclick=(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      const url=driveUrl.startsWith('http')?driveUrl:'https://'+driveUrl;
+      window.open(url,'_blank','noopener');
+    };
     driveBtn.removeAttribute('href');
   } else {
     driveBtn.style.display='none';
