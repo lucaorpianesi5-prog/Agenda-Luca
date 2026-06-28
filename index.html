@@ -3,9 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Agenda · Luca</title>
-<link rel="icon" type="image/png" href="Logo_App.png"/>
-<link rel="apple-touch-icon" href="Logo_App.png"/>
+<title>Mente Consciente</title>
 <script>
 function scriptGoogleListo(){
   window._googleListo = true;
@@ -29,9 +27,11 @@ function scriptGoogleListo(){
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--texto);font-size:14px;line-height:1.5}
 
 /* LOGIN */
-#login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:1.5rem;padding:2rem;background:var(--bg)}
-#login-screen h1{font-size:1.5rem;font-weight:600;color:var(--verde)}
-#login-screen p{color:var(--suave);font-size:0.9rem;text-align:center;max-width:300px}
+@keyframes loginFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+#login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:1.25rem;padding:2rem;background:var(--bg);animation:loginFadeIn 0.6s ease both}
+#login-logo{width:130px;height:130px;border-radius:28px;object-fit:cover;display:block}
+#login-screen h1{font-size:1.6rem;font-weight:700;color:var(--verde);letter-spacing:0.01em;margin-top:0.25rem}
+#login-screen p{color:var(--suave);font-size:0.88rem;text-align:center;max-width:280px;line-height:1.6}
 #login-btn{background:var(--verde);color:#0D1A12;border:none;padding:0.8rem 2rem;border-radius:6px;font-size:0.9rem;cursor:pointer;transition:background 0.2s;font-weight:600}
 #login-btn:hover{background:#3DAF65}
 #login-btn:disabled{opacity:0.6;cursor:not-allowed}
@@ -367,8 +367,8 @@ tr:hover td{background:rgba(82,196,122,0.04)}
 
 <!-- LOGIN -->
 <div id="login-screen">
-  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#52C47A" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-  <h1>Agenda · Luca</h1>
+  <img id="login-logo" src="Logo_App.png" alt="Mente Consciente"/>
+  <h1>Mente Consciente</h1>
   <p>Iniciá sesión con tu cuenta de Google para acceder a tus datos</p>
   <button id="login-btn" onclick="iniciarSesion()" disabled style="opacity:0.7">Cargando...</button>
 </div>
@@ -379,7 +379,7 @@ tr:hover td{background:rgba(82,196,122,0.04)}
 
 <aside>
   <div class="logo">
-    <h1>Luca</h1>
+    <h1>Mente Consciente</h1>
     <p>Entrenador Personal</p>
     <p class="logo-user" id="user-email"></p>
   </div>
