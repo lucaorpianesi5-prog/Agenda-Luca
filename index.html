@@ -161,18 +161,22 @@ tr:hover td{background:rgba(74,184,112,0.04)}
   --pd-red-dim:  rgba(224,92,92,0.12);
   --pd-amber:    #E8A84A;
 }
-.pd-back{background:var(--pd-bg3);border:0.5px solid var(--pd-border2);color:var(--pd-text2);padding:0.4rem 0.85rem;border-radius:6px;font-size:0.78rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;margin-bottom:1rem;transition:background 0.2s}
+.pd-back{background:var(--pd-bg3);border:0.5px solid var(--pd-border2);color:var(--pd-text2);padding:0.4rem 0.85rem;border-radius:6px;font-size:0.78rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;transition:background 0.2s}
 .pd-back:hover{background:var(--pd-card2)}
 .pd-header{margin-bottom:1rem}
-.pd-header-main{background:var(--pd-card);border:0.5px solid var(--pd-border2);border-radius:10px;padding:1.25rem;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap}
+.pd-header-main{background:var(--pd-card);border:0.5px solid var(--pd-border2);border-radius:10px;padding:1.25rem;display:flex;align-items:flex-start;gap:1.25rem}
 .pd-avatar{width:52px;height:52px;border-radius:50%;background:var(--pd-verde-dim);border:1.5px solid var(--pd-verde);display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:700;color:var(--pd-verde);flex-shrink:0}
-.pd-header-info{flex:1;min-width:200px}
+.pd-header-info{flex:1;min-width:0}
 .pd-nombre{font-size:1.3rem;font-weight:700;color:var(--pd-text)}
 .pd-dias{font-size:0.78rem;color:var(--pd-text2);margin-top:0.2rem}
 .pd-gestion-row{display:flex;flex-wrap:wrap;gap:1.25rem;margin-top:0.6rem}
 .pd-gestion-item p:first-child{font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--pd-text3)}
 .pd-gestion-item p:last-child{font-size:0.88rem;font-weight:600;color:var(--pd-text);margin-top:0.1rem}
-.pd-header-btns{display:flex;gap:0.5rem;flex-shrink:0}
+.pd-header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem}
+.pd-header-top-btns{display:flex;gap:0.5rem}
+.pd-whatsapp-row{margin-top:0.5rem}
+.pd-header-btns{display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem;flex-shrink:0}
+.pd-asistencia-row{display:flex;gap:0.5rem}
 .pd-btn{padding:0.4rem 0.9rem;border-radius:6px;font-size:0.78rem;cursor:pointer;border:0.5px solid;transition:all 0.2s;font-family:inherit}
 .pd-btn-primary{background:var(--pd-verde);color:#0D1A12;border-color:var(--pd-verde);font-weight:600}
 .pd-btn-primary:hover{background:#3DAF65}
@@ -261,7 +265,9 @@ tr:hover td{background:rgba(74,184,112,0.04)}
 }
 @media(max-width:600px){
   .pd-stats{grid-template-columns:repeat(2,1fr)}
-  .pd-header-main{flex-direction:column;align-items:flex-start}
+  .pd-header-main{flex-wrap:wrap}
+  .pd-header-btns{flex-direction:row;align-items:center;flex-wrap:wrap;justify-content:flex-end;width:100%}
+  .pd-asistencia-row{flex-wrap:wrap}
 }
 
 /* ── FIN PERFIL DARK ── */
@@ -601,10 +607,18 @@ tr:hover td{background:rgba(74,184,112,0.04)}
 
       <!-- HEADER -->
       <div class="pd-header">
-        <button class="pd-back" onclick="showPage('alumnos',null);_syncBottomNavFromPerfil()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-          Volver
-        </button>
+        <!-- Barra superior: Volver + Editar/Eliminar -->
+        <div class="pd-header-top">
+          <button class="pd-back" onclick="showPage('alumnos',null);_syncBottomNavFromPerfil()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            Volver
+          </button>
+          <div class="pd-header-top-btns">
+            <button id="perfil-btn-editar" class="pd-btn pd-btn-secondary">Editar</button>
+            <button id="perfil-btn-eliminar" class="pd-btn pd-btn-danger">Eliminar</button>
+          </div>
+        </div>
+        <!-- Card principal -->
         <div class="pd-header-main">
           <div class="pd-avatar" id="perfil-avatar"></div>
           <div class="pd-header-info">
@@ -614,14 +628,16 @@ tr:hover td{background:rgba(74,184,112,0.04)}
             </div>
             <p id="perfil-dias" class="pd-dias"></p>
             <div id="perfil-gestion" class="pd-gestion-row"></div>
+            <div class="pd-whatsapp-row">
+              <button id="perfil-btn-whatsapp" class="pd-btn pd-btn-wa" style="display:none">WhatsApp</button>
+            </div>
           </div>
           <div class="pd-header-btns">
-            <button id="perfil-btn-whatsapp" class="pd-btn pd-btn-wa" style="display:none">WhatsApp</button>
             <button id="perfil-btn-drive" class="pd-btn pd-btn-drive" style="display:none">📁 Plan</button>
-            <button id="perfil-btn-asistencia" class="pd-btn pd-btn-asistencia">💪 Asistencia</button>
-            <button id="perfil-btn-recuperacion" class="pd-btn pd-btn-recuperacion">🧘 Recuperación</button>
-            <button id="perfil-btn-editar" class="pd-btn pd-btn-secondary">Editar</button>
-            <button id="perfil-btn-eliminar" class="pd-btn pd-btn-danger">Eliminar</button>
+            <div class="pd-asistencia-row">
+              <button id="perfil-btn-asistencia" class="pd-btn pd-btn-asistencia">💪 Asistencia</button>
+              <button id="perfil-btn-recuperacion" class="pd-btn pd-btn-recuperacion">🧘 Recuperación</button>
+            </div>
           </div>
         </div>
       </div>
