@@ -185,6 +185,9 @@ tr:hover td{background:rgba(74,184,112,0.04)}
 .pd-btn-asistencia{background:rgba(74,184,112,0.1);color:var(--pd-verde);border-color:rgba(74,184,112,0.25)}
 .pd-btn-asistencia:hover{background:rgba(74,184,112,0.18)}
 .pd-btn-asistencia:disabled{opacity:0.5;cursor:not-allowed}
+.pd-btn-recuperacion{background:rgba(200,168,122,0.1);color:var(--pd-crema);border-color:rgba(200,168,122,0.25)}
+.pd-btn-recuperacion:hover{background:rgba(200,168,122,0.18)}
+.pd-btn-recuperacion:disabled{opacity:0.5;cursor:not-allowed}
 
 /* STATS */
 .pd-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:0.6rem;margin-bottom:1rem}
@@ -407,7 +410,11 @@ tr:hover td{background:rgba(74,184,112,0.04)}
 .portal-objetivo{font-size:0.85rem;color:var(--texto);padding:0.5rem 0.75rem;background:#223527;border-radius:6px;border-left:2px solid var(--verde-s);line-height:1.45}
 .portal-objetivo::before{content:'→ ';color:var(--verde-s);font-weight:600}
 .portal-racha-card{text-align:center;padding:1.5rem 1rem}
+.portal-racha-row{display:flex;justify-content:center;align-items:center;gap:2rem}
+.portal-racha-item{display:flex;flex-direction:column;align-items:center}
+.portal-racha-item-sec{padding-left:2rem;border-left:1px solid rgba(74,184,112,0.15)}
 .portal-racha-num{font-size:3rem;font-weight:800;color:var(--verde);line-height:1}
+.portal-racha-num-sec{font-size:1.8rem;color:#C8A87A}
 .portal-racha-label{font-size:0.82rem;color:var(--suave);margin-top:0.35rem;text-transform:uppercase;letter-spacing:0.06em}
 .portal-racha-cero{font-size:0.85rem;color:var(--suave);font-style:italic}
 .portal-empty{font-size:0.85rem;color:var(--suave);text-align:center;padding:0.5rem 0}
@@ -611,7 +618,8 @@ tr:hover td{background:rgba(74,184,112,0.04)}
           <div class="pd-header-btns">
             <button id="perfil-btn-whatsapp" class="pd-btn pd-btn-wa" style="display:none">WhatsApp</button>
             <button id="perfil-btn-drive" class="pd-btn pd-btn-drive" style="display:none">📁 Plan</button>
-            <button id="perfil-btn-asistencia" class="pd-btn pd-btn-asistencia">✓ Asistencia</button>
+            <button id="perfil-btn-asistencia" class="pd-btn pd-btn-asistencia">💪 Asistencia</button>
+            <button id="perfil-btn-recuperacion" class="pd-btn pd-btn-recuperacion">🧘 Recuperación</button>
             <button id="perfil-btn-editar" class="pd-btn pd-btn-secondary">Editar</button>
             <button id="perfil-btn-eliminar" class="pd-btn pd-btn-danger">Eliminar</button>
           </div>
@@ -895,7 +903,7 @@ const RANGO = {
   AHORROS_READ:        'Ahorros!A2:B1000',
   AHORROS_WRITE:       'Ahorros!A2:B1000',
   AHORROS_START:       'Ahorros!A2',
-  ASISTENCIAS_READ:    'Asistencias!A2:B1000',
+  ASISTENCIAS_READ:    'Asistencias!A2:C1000',
   ASISTENCIAS_START:   'Asistencias!A2',
 };
 
@@ -978,12 +986,11 @@ async function cargarPortalAlumno(id){
         return toDate(b.fecha) - toDate(a.fecha);
       });
 
-    // Racha de asistencia — semanas consecutivas con al menos 1 asistencia
-    const fechasAsistencia = rowsAs
-      .filter(r => r[0] === id && r[1])
-      .map(r => { const [d,m,y]=r[1].split('/'); return new Date(`${y}-${m}-${d}`); })
-      .filter(d => !isNaN(d));
-    const racha = calcularRachaPortal(fechasAsistencia);
+    // Racha de clases (asistencias efectivas) + contador de recuperaciones
+    // Retrocompatible: filas viejas sin columna 'tipo' cuentan como 'asistencia'
+    const registrosAlumno = rowsAs.filter(r => r[0] === id && r[1]);
+    const racha = registrosAlumno.filter(r => !r[2] || r[2] === 'asistencia').length;
+    const recuperaciones = registrosAlumno.filter(r => r[2] === 'recuperacion').length;
 
     const hpd = portalStringToHorarios(a.horario);
     const diasStr = a.dias.map(d => hpd[d] ? `${d} ${hpd[d]}` : d).join(' · ') || 'Sin días asignados';
@@ -1078,12 +1085,21 @@ async function cargarPortalAlumno(id){
           </ul>
         </div>` : ''}
 
-        <!-- Racha de asistencia -->
+        <!-- Racha de clases + recuperaciones -->
         <div class="portal-card portal-racha-card">
-          ${racha === 0
-            ? `<div class="portal-racha-cero">Sin asistencias recientes</div>`
-            : `<div class="portal-racha-num">${racha >= 3 ? '🔥 ' : ''}${racha}</div>
-               <div class="portal-racha-label">semana${racha !== 1 ? 's' : ''} seguida${racha !== 1 ? 's' : ''}</div>`
+          ${racha === 0 && recuperaciones === 0
+            ? `<div class="portal-racha-cero">Sin registros todavía</div>`
+            : `<div class="portal-racha-row">
+                 <div class="portal-racha-item">
+                   <div class="portal-racha-num">${racha >= 3 ? '🔥 ' : ''}${racha}</div>
+                   <div class="portal-racha-label">clase${racha !== 1 ? 's' : ''} seguida${racha !== 1 ? 's' : ''}</div>
+                 </div>
+                 ${recuperaciones > 0 ? `
+                 <div class="portal-racha-item portal-racha-item-sec">
+                   <div class="portal-racha-num portal-racha-num-sec">🧘 ${recuperaciones}</div>
+                   <div class="portal-racha-label">recuperación${recuperaciones !== 1 ? 'es' : ''}</div>
+                 </div>` : ''}
+               </div>`
           }
         </div>
 
@@ -1132,36 +1148,6 @@ function portalCalcEdad(fechaStr){
   return edad;
 }
 
-function calcularRachaPortal(fechas){
-  if(!fechas.length) return 0;
-  // Obtener el lunes de la semana de una fecha dada
-  function lunesDe(d){
-    const r = new Date(d);
-    const dia = r.getDay(); // 0=Dom
-    const diff = dia === 0 ? -6 : 1 - dia;
-    r.setDate(r.getDate() + diff);
-    r.setHours(0,0,0,0);
-    return r.getTime();
-  }
-  // Semanas únicas con asistencia
-  const semanas = new Set(fechas.map(d => lunesDe(d)));
-  const hoy = new Date(); hoy.setHours(0,0,0,0);
-  let racha = 0;
-  let semanaActual = lunesDe(hoy);
-  // Permitir que la semana actual no tenga asistencia aún (la racha no se rompe)
-  if(!semanas.has(semanaActual)){
-    // Si la semana pasada tampoco tiene, racha = 0
-    const semanaPasada = semanaActual - 7 * 86400000;
-    if(!semanas.has(semanaPasada)) return 0;
-    semanaActual = semanaPasada;
-  }
-  // Contar hacia atrás desde semanaActual
-  while(semanas.has(semanaActual)){
-    racha++;
-    semanaActual -= 7 * 86400000;
-  }
-  return racha;
-}
 
 let tokenClient = null;
 
@@ -1711,8 +1697,13 @@ function verAlumno(id){
   };
   const asistenciaBtn=document.getElementById('perfil-btn-asistencia');
   asistenciaBtn.disabled=false;
-  asistenciaBtn.textContent='✓ Asistencia';
-  asistenciaBtn.onclick=()=>registrarAsistencia(id, asistenciaBtn);
+  asistenciaBtn.textContent='💪 Asistencia';
+  asistenciaBtn.onclick=()=>registrarAsistencia(id, asistenciaBtn, 'asistencia');
+
+  const recuperacionBtn=document.getElementById('perfil-btn-recuperacion');
+  recuperacionBtn.disabled=false;
+  recuperacionBtn.textContent='🧘 Recuperación';
+  recuperacionBtn.onclick=()=>registrarAsistencia(id, recuperacionBtn, 'recuperacion');
 
   // Stats row
   const edad=calcularEdad(a.fechaNac);
@@ -1790,18 +1781,19 @@ function verAlumno(id){
   showPage('perfil',null);
 }
 
-async function registrarAsistencia(id, btn){
+async function registrarAsistencia(id, btn, tipo){
+  const textoOriginal = tipo === 'recuperacion' ? '🧘 Recuperación' : '💪 Asistencia';
   btn.disabled=true;
   btn.textContent='Registrando...';
   try{
     const fecha=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-    await sheetsAppend(RANGO.ASISTENCIAS_START,[[id, fecha]]);
-    toast('Asistencia registrada ✓');
-    btn.textContent='✓ Registrada';
+    await sheetsAppend(RANGO.ASISTENCIAS_START,[[id, fecha, tipo]]);
+    toast(tipo === 'recuperacion' ? 'Recuperación registrada 🧘' : 'Asistencia registrada 💪');
+    btn.textContent = tipo === 'recuperacion' ? '🧘 Registrada' : '💪 Registrada';
   }catch(e){
-    toast('Error al registrar asistencia');
+    toast('Error al registrar');
     btn.disabled=false;
-    btn.textContent='✓ Asistencia';
+    btn.textContent=textoOriginal;
   }
 }
 
