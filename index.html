@@ -266,8 +266,10 @@ tr:hover td{background:rgba(74,184,112,0.04)}
 @media(max-width:600px){
   .pd-stats{grid-template-columns:repeat(2,1fr)}
   .pd-header-main{flex-wrap:wrap}
-  .pd-header-btns{flex-direction:row;align-items:center;flex-wrap:wrap;justify-content:flex-end;width:100%}
-  .pd-asistencia-row{flex-wrap:wrap}
+  .pd-header-btns{flex-direction:row;align-items:stretch;width:100%;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--pd-border)}
+  .pd-header-btns .pd-btn-drive{flex:1}
+  .pd-asistencia-row{flex:2;display:flex;gap:0.5rem}
+  .pd-asistencia-row .pd-btn{flex:1}
 }
 
 /* ── FIN PERFIL DARK ── */
