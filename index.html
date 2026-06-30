@@ -387,12 +387,17 @@ tr:hover td{background:rgba(74,184,112,0.04)}
 .portal-logo-txt{font-size:0.9rem;font-weight:600;color:var(--verde)}
 .portal-card{background:var(--blanco);border:1px solid var(--borde);border-radius:10px;padding:1.25rem}
 .portal-card-title{font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--suave);font-weight:600;margin-bottom:0.85rem}
-.portal-hero{display:flex;align-items:center;gap:1rem}
+.portal-hero{display:flex;flex-direction:column;gap:0.85rem}
+.portal-hero-top{display:flex;align-items:center;gap:1rem}
 .portal-avatar{width:56px;height:56px;border-radius:50%;background:var(--verde-bg);color:var(--verde);font-weight:700;font-size:1.2rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid var(--verde)}
 .portal-hero-info{flex:1;min-width:0}
 .portal-nombre{font-size:1.3rem;font-weight:700;color:var(--texto);line-height:1.2}
-.portal-dias{font-size:0.8rem;color:var(--suave);margin-top:0.25rem;line-height:1.5}
 .portal-freq{font-size:0.78rem;color:var(--verde);font-weight:500;margin-top:0.15rem}
+.portal-hero-bottom{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;border-top:1px solid rgba(74,184,112,0.1);padding-top:0.85rem}
+.portal-dias{font-size:0.8rem;color:var(--suave);line-height:1.6;flex:1}
+.portal-hero-racha{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+.portal-racha-num{font-size:2.8rem;font-weight:800;line-height:1}
+.portal-racha-label{font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.06em;margin-top:0.2rem;text-align:center}
 .portal-datos-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem}
 .portal-dato{background:#223527;border-radius:7px;padding:0.6rem 0.75rem;display:flex;flex-direction:column;gap:0.2rem}
 .portal-dato-label{font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--suave)}
@@ -417,14 +422,7 @@ tr:hover td{background:rgba(74,184,112,0.04)}
 .portal-objetivos{list-style:none;display:flex;flex-direction:column;gap:0.5rem}
 .portal-objetivo{font-size:0.85rem;color:var(--texto);padding:0.5rem 0.75rem;background:#223527;border-radius:6px;border-left:2px solid var(--verde-s);line-height:1.45}
 .portal-objetivo::before{content:'→ ';color:var(--verde-s);font-weight:600}
-.portal-racha-card{text-align:center;padding:1.5rem 1rem}
-.portal-racha-row{display:flex;justify-content:center;align-items:center;gap:2rem}
-.portal-racha-item{display:flex;flex-direction:column;align-items:center}
-.portal-racha-item-sec{padding-left:2rem;border-left:1px solid rgba(74,184,112,0.15)}
-.portal-racha-num{font-size:3rem;font-weight:800;color:var(--verde);line-height:1}
-.portal-racha-num-sec{font-size:1.8rem;color:#C8A87A}
-.portal-racha-label{font-size:0.82rem;color:var(--suave);margin-top:0.35rem;text-transform:uppercase;letter-spacing:0.06em}
-.portal-racha-cero{font-size:0.85rem;color:var(--suave);font-style:italic}
+
 .portal-empty{font-size:0.85rem;color:var(--suave);text-align:center;padding:0.5rem 0}
 .portal-footer{text-align:center;font-size:0.75rem;color:var(--suave);margin-top:0.5rem}
 .portal-loading{text-align:center;padding:3rem;color:var(--suave);font-size:0.9rem}
@@ -1062,12 +1060,20 @@ async function cargarPortalAlumno(id){
 
         <!-- Perfil card -->
         <div class="portal-card portal-hero">
-          <div class="portal-avatar">${escaparHTML(iniciales)}</div>
-          <div class="portal-hero-info">
-            <h1 class="portal-nombre">${escaparHTML(a.nombre)}</h1>
+          <div class="portal-hero-top">
+            <div class="portal-avatar">${escaparHTML(iniciales)}</div>
+            <div class="portal-hero-info">
+              <h1 class="portal-nombre">${escaparHTML(a.nombre)}</h1>
+              <p class="portal-freq">${escaparHTML(a.frecuencia)}x por semana</p>
+              ${proximaSesionStr ? `<span class="portal-proxima ${escaparHTML(proximaSesionClase)}">📅 ${escaparHTML(proximaSesionStr)}</span>` : ''}
+            </div>
+          </div>
+          <div class="portal-hero-bottom">
             <p class="portal-dias">${escaparHTML(diasStr)}</p>
-            <p class="portal-freq">${escaparHTML(a.frecuencia)}x por semana</p>
-            ${proximaSesionStr ? `<span class="portal-proxima ${escaparHTML(proximaSesionClase)}">📅 ${escaparHTML(proximaSesionStr)}</span>` : ''}
+            <div class="portal-hero-racha">
+              <div class="portal-racha-num" id="portal-racha-num">${racha}</div>
+              <div class="portal-racha-label">clase${racha !== 1 ? 's' : ''} seguida${racha !== 1 ? 's' : ''}</div>
+            </div>
           </div>
         </div>
 
@@ -1103,24 +1109,6 @@ async function cargarPortalAlumno(id){
           </ul>
         </div>` : ''}
 
-        <!-- Racha de clases + recuperaciones -->
-        <div class="portal-card portal-racha-card">
-          ${racha === 0 && recuperaciones === 0
-            ? `<div class="portal-racha-cero">Sin registros todavía</div>`
-            : `<div class="portal-racha-row">
-                 <div class="portal-racha-item">
-                   <div class="portal-racha-num">${racha >= 3 ? '🔥 ' : ''}${racha}</div>
-                   <div class="portal-racha-label">clase${racha !== 1 ? 's' : ''} seguida${racha !== 1 ? 's' : ''}</div>
-                 </div>
-                 ${recuperaciones > 0 ? `
-                 <div class="portal-racha-item portal-racha-item-sec">
-                   <div class="portal-racha-num portal-racha-num-sec">🧘 ${recuperaciones}</div>
-                   <div class="portal-racha-label">recuperación${recuperaciones !== 1 ? 'es' : ''}</div>
-                 </div>` : ''}
-               </div>`
-          }
-        </div>
-
         <!-- Seguimiento -->
         <div class="portal-card">
           <div class="portal-card-title">Seguimiento</div>
@@ -1137,6 +1125,19 @@ async function cargarPortalAlumno(id){
         <p class="portal-footer">Tu entrenador personal · Mente Consciente</p>
       </div>
     `;
+    // Gradiente dinámico racha
+    const rachaEl = document.getElementById('portal-racha-num');
+    if(rachaEl){
+      const t = Math.min((racha - 1) / 14, 1);
+      const r = Math.round(0x4A + (0xC8 - 0x4A) * t);
+      const g = Math.round(0xB8 + (0xA8 - 0xB8) * t);
+      const b = Math.round(0x70 + (0x7A - 0x70) * t);
+      const end = '#' + [r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+      rachaEl.style.background = `linear-gradient(135deg, #4AB870, ${end})`;
+      rachaEl.style.webkitBackgroundClip = 'text';
+      rachaEl.style.webkitTextFillColor = 'transparent';
+      rachaEl.style.backgroundClip = 'text';
+    }
   } catch(e) {
     el.innerHTML = '<div class="portal-error">No se pudo cargar el perfil. Intentá de nuevo más tarde.</div>';
     console.error(e);
