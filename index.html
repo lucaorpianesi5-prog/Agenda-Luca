@@ -904,8 +904,8 @@ const RANGO = {
   ALUMNOS_READ:        'Alumnos!A2:R1000',
   ALUMNOS_WRITE:       'Alumnos!A2:R1000',
   ALUMNOS_START:       'Alumnos!A2',
-  COBROS_READ:         'Cobros!A2:F1000',
-  COBROS_WRITE:        'Cobros!A2:F1000',
+  COBROS_READ:         'Cobros!A2:G1000',
+  COBROS_WRITE:        'Cobros!A2:G1000',
   COBROS_START:        'Cobros!A2',
   SEGUIMIENTO_READ:    'Seguimiento!A2:C10000',
   SEGUIMIENTO_WRITE:   'Seguimiento!A2:C10000',
@@ -991,10 +991,10 @@ async function cargarPortalAlumno(id){
         return toDate(b.fecha) - toDate(a.fecha);
       });
 
-    // Racha de clases (asistencias efectivas) + contador de recuperaciones
+    // Racha de clases (se corta si pasa una semana sin asistencia) + recuperaciones
     // Retrocompatible: filas viejas sin columna 'tipo' cuentan como 'asistencia'
     const registrosAlumno = rowsAs;
-    const racha = registrosAlumno.filter(r => !r[1] || r[1] === 'asistencia').length;
+    const racha = portalCalcularRachaSemanal(registrosAlumno);
     const recuperaciones = registrosAlumno.filter(r => r[1] === 'recuperacion').length;
 
     const hpd = portalStringToHorarios(a.horario);
@@ -1117,7 +1117,7 @@ async function cargarPortalAlumno(id){
     // Gradiente dinámico racha
     const rachaEl = document.getElementById('portal-racha-num');
     if(rachaEl){
-      const t = Math.min((racha - 1) / 14, 1);
+      const t = Math.max(0, Math.min((racha - 1) / 14, 1));
       const r = Math.round(0x4A + (0xC8 - 0x4A) * t);
       const g = Math.round(0xB8 + (0xA8 - 0xB8) * t);
       const b = Math.round(0x70 + (0x7A - 0x70) * t);
@@ -1141,6 +1141,36 @@ function portalStringToHorarios(str){
     if(idx>0){ result[part.slice(0,idx)]=part.slice(idx+1); }
   });
   return result;
+}
+
+// B4: racha real — se corta sola si pasa una semana (7+ días) sin registrar
+// asistencia. Las recuperaciones son neutras: no suman a la racha ni la
+// cortan, simplemente se ignoran para este cálculo. Retrocompatible: filas
+// viejas sin columna 'tipo' cuentan como 'asistencia'.
+function portalCalcularRachaSemanal(registros){
+  const toDate = s => { const [d,m,y]=s.split('/'); return new Date(`${y}-${m}-${d}`); };
+  const fechas = registros
+    .filter(r => !r[1] || r[1] === 'asistencia')
+    .map(r => toDate(r[0]))
+    .sort((a,b) => a - b);
+
+  if(!fechas.length) return 0;
+
+  const MS_SEMANA = 7 * 24 * 60 * 60 * 1000;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const ultima = fechas[fechas.length - 1];
+
+  // Si pasó más de una semana desde la última clase, la racha está cortada.
+  if(hoy - ultima > MS_SEMANA) return 0;
+
+  // Cuenta hacia atrás mientras no haya un salto de más de una semana entre clases.
+  let racha = 1;
+  for(let i = fechas.length - 1; i > 0; i--){
+    const gap = fechas[i] - fechas[i-1];
+    if(gap > MS_SEMANA) break;
+    racha++;
+  }
+  return racha;
 }
 
 function portalCalcEdad(fechaStr){
@@ -1300,89 +1330,107 @@ async function cargarDatos(){
   try {
     toast('Sincronizando...');
 
-    // Alumnos
-    try{
-      const rowsA = await sheetsGet(RANGO.ALUMNOS_READ);
-      alumnos = rowsA.map(r=>({
-        id:           r[0]||'',
-        nombre:       r[1]||'',
-        horario:      r[2]||'',
-        dias:         r[3]?(r[3].split('|')):[],
-        frecuencia:   r[4]||'2',
-        monto:        r[5]||'0',
-        objetivos:    r[6]||'',
-        notas:        r[7]||'',
-        estado:       r[8]||'activo',
-        telefono:     r[9]||'',
-        fechaNac:     r[10]||'',
-        estatura:     r[11]||'',
-        pesoInicial:  r[12]||'',
-        pesoActual:   r[13]||'',
-        historialFis: r[14]||'',
-        tieneNutri:   r[15]||'no',
-        carpetaDrive: r[16]||'',
-        nutriDrive:   r[17]||'',
-      })).filter(a=>a.id);
-    }catch(e){console.warn('Error cargando Alumnos:',e);alumnos=[];}
+    await Promise.all([
+      // Alumnos
+      (async()=>{
+        try{
+          const rowsA = await sheetsGet(RANGO.ALUMNOS_READ);
+          alumnos = rowsA.map(r=>({
+            id:           r[0]||'',
+            nombre:       r[1]||'',
+            horario:      r[2]||'',
+            dias:         r[3]?(r[3].split('|')):[],
+            frecuencia:   r[4]||'2',
+            monto:        r[5]||'0',
+            objetivos:    r[6]||'',
+            notas:        r[7]||'',
+            estado:       r[8]||'activo',
+            telefono:     r[9]||'',
+            fechaNac:     r[10]||'',
+            estatura:     r[11]||'',
+            pesoInicial:  r[12]||'',
+            pesoActual:   r[13]||'',
+            historialFis: r[14]||'',
+            tieneNutri:   r[15]||'no',
+            carpetaDrive: r[16]||'',
+            nutriDrive:   r[17]||'',
+          })).filter(a=>a.id);
+        }catch(e){console.warn('Error cargando Alumnos:',e);alumnos=[];}
+      })(),
 
-    // Cobros
-    try{
-      const rowsC = await sheetsGet(RANGO.COBROS_READ);
-      cobros={};
-      rowsC.forEach(r=>{
-        if(!r[0]||!r[1]) return;
-        if(!cobros[r[0]]) cobros[r[0]]={};
-        cobros[r[0]][r[1]]={estado:r[2]||'pendiente',fecha:r[3]||'',bono:r[4]||'',fechaBono:r[5]||''};
-      });
-    }catch(e){console.warn('Error cargando Cobros:',e);cobros={};}
+      // Cobros
+      (async()=>{
+        try{
+          const rowsC = await sheetsGet(RANGO.COBROS_READ);
+          cobros={};
+          rowsC.forEach(r=>{
+            if(!r[0]||!r[1]) return;
+            if(!cobros[r[0]]) cobros[r[0]]={};
+            cobros[r[0]][r[1]]={estado:r[2]||'pendiente',fecha:r[3]||'',bono:r[4]||'',fechaBono:r[5]||'',monto:r[6]||''};
+          });
+        }catch(e){console.warn('Error cargando Cobros:',e);cobros={};}
+      })(),
 
-    // Seguimiento
-    try{
-      const rowsS = await sheetsGet(RANGO.SEGUIMIENTO_READ);
-      seguimiento={};
-      rowsS.forEach(r=>{
-        if(!r[0]) return;
-        if(!seguimiento[r[0]]) seguimiento[r[0]]=[];
-        seguimiento[r[0]].push({fecha:r[1]||'',texto:r[2]||''});
-      });
-    }catch(e){console.warn('Error cargando Seguimiento:',e);seguimiento={};}
+      // Seguimiento
+      (async()=>{
+        try{
+          const rowsS = await sheetsGet(RANGO.SEGUIMIENTO_READ);
+          seguimiento={};
+          rowsS.forEach(r=>{
+            if(!r[0]) return;
+            if(!seguimiento[r[0]]) seguimiento[r[0]]=[];
+            seguimiento[r[0]].push({fecha:r[1]||'',texto:r[2]||''});
+          });
+        }catch(e){console.warn('Error cargando Seguimiento:',e);seguimiento={};}
+      })(),
 
-    // Nutrición - Clientes
-    try{
-      const rowsNC = await sheetsGet(RANGO.NUTRICION_READ);
-      clientesNutri=rowsNC.map(r=>({
-        id:r[0]||'',nombre:r[1]||'',telefono:r[2]||'',estado:r[3]||'activo',notas:r[4]||''
-      })).filter(c=>c.id);
-    }catch(e){console.warn('Error cargando Nutricion:',e);clientesNutri=[];}
+      // Nutrición - Clientes
+      (async()=>{
+        try{
+          const rowsNC = await sheetsGet(RANGO.NUTRICION_READ);
+          clientesNutri=rowsNC.map(r=>({
+            id:r[0]||'',nombre:r[1]||'',telefono:r[2]||'',estado:r[3]||'activo',notas:r[4]||''
+          })).filter(c=>c.id);
+        }catch(e){console.warn('Error cargando Nutricion:',e);clientesNutri=[];}
+      })(),
 
-    // Nutrición - Cobros
-    try{
-      const rowsNP = await sheetsGet(RANGO.NUTRI_COBROS_READ);
-      cobrosNutri={};
-      rowsNP.forEach(r=>{
-        if(!r[0]||!r[1]) return;
-        if(!cobrosNutri[r[0]]) cobrosNutri[r[0]]={};
-        cobrosNutri[r[0]][r[1]]={monto:r[2]||'',fecha:r[3]||''};
-      });
-    }catch(e){console.warn('Error cargando NutricionCobros:',e);cobrosNutri={};}
+      // Nutrición - Cobros
+      (async()=>{
+        try{
+          const rowsNP = await sheetsGet(RANGO.NUTRI_COBROS_READ);
+          cobrosNutri={};
+          rowsNP.forEach(r=>{
+            if(!r[0]||!r[1]) return;
+            if(!cobrosNutri[r[0]]) cobrosNutri[r[0]]={};
+            cobrosNutri[r[0]][r[1]]={monto:r[2]||'',fecha:r[3]||''};
+          });
+        }catch(e){console.warn('Error cargando NutricionCobros:',e);cobrosNutri={};}
+      })(),
 
-    // Gastos
-    try{
-      const rowsG = await sheetsGet(RANGO.GASTOS_READ);
-      gastos=rowsG.map(r=>({id:r[0]||'',fecha:r[1]||'',desc:r[2]||'',monto:r[3]||'0'})).filter(g=>g.id);
-    }catch(e){console.warn('Error cargando Gastos:',e);gastos=[];}
+      // Gastos
+      (async()=>{
+        try{
+          const rowsG = await sheetsGet(RANGO.GASTOS_READ);
+          gastos=rowsG.map(r=>({id:r[0]||'',fecha:r[1]||'',desc:r[2]||'',monto:r[3]||'0'})).filter(g=>g.id);
+        }catch(e){console.warn('Error cargando Gastos:',e);gastos=[];}
+      })(),
 
-    // Ahorros
-    try{
-      const rowsA2 = await sheetsGet(RANGO.AHORROS_READ);
-      ahorros={};
-      rowsA2.forEach(r=>{if(r[0]) ahorros[r[0]]=parseFloat(r[1]||0);});
-    }catch(e){console.warn('Error cargando Ahorros:',e);ahorros={};}
+      // Ahorros
+      (async()=>{
+        try{
+          const rowsA2 = await sheetsGet(RANGO.AHORROS_READ);
+          ahorros={};
+          rowsA2.forEach(r=>{if(r[0]) ahorros[r[0]]=parseFloat(r[1]||0);});
+        }catch(e){console.warn('Error cargando Ahorros:',e);ahorros={};}
+      })(),
 
-    // Asistencias (B1: necesario para chequear duplicados del mismo día)
-    try{
-      asistencias = await sheetsGet(RANGO.ASISTENCIAS_READ);
-    }catch(e){console.warn('Error cargando Asistencias:',e);asistencias=[];}
+      // Asistencias (B1: necesario para chequear duplicados del mismo día)
+      (async()=>{
+        try{
+          asistencias = await sheetsGet(RANGO.ASISTENCIAS_READ);
+        }catch(e){console.warn('Error cargando Asistencias:',e);asistencias=[];}
+      })(),
+    ]);
 
     toast('Datos sincronizados ✓');
     renderTablaAlumnos();
@@ -1439,7 +1487,7 @@ async function guardarCobrosEnSheets(){
   const values=[];
   Object.entries(cobros).forEach(([mk,mes])=>{
     Object.entries(mes).forEach(([aid,c])=>{
-      values.push([mk,aid,c.estado,c.fecha||'',c.bono||'',c.fechaBono||'']);
+      values.push([mk,aid,c.estado,c.fecha||'',c.bono||'',c.fechaBono||'',c.monto||'']);
     });
   });
   await sheetsReplaceRange(RANGO.COBROS_WRITE, values);
@@ -1510,14 +1558,14 @@ function renderDashboard(){
   } else {
     alertaEl.style.display='block';
     alertaEl.innerHTML=`
-      <div style="background:var(--amarillo-bg);border:1px solid rgba(230,126,34,0.25);border-radius:8px;padding:1rem 1.25rem">
+      <div style="background:var(--amarillo-bg);border:1px solid rgba(232,168,74,0.3);border-radius:8px;padding:1rem 1.25rem">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.75rem">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--amarillo)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           <p style="font-size:0.85rem;font-weight:600;color:var(--amarillo)">${alumnosPendientes.length} alumno${alumnosPendientes.length>1?'s':''}  sin cobrar este mes</p>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:0.5rem">
           ${alumnosPendientes.map(a=>`
-            <span onclick="verAlumno('${a.id}')" style="background:var(--blanco);border:1px solid rgba(230,126,34,0.3);padding:0.3rem 0.75rem;border-radius:20px;font-size:0.8rem;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='#fde8c8'" onmouseout="this.style.background='var(--blanco)'">${escaparHTML(a.nombre)}</span>
+            <span onclick="verAlumno('${a.id}')" style="background:var(--blanco);border:1px solid rgba(232,168,74,0.3);padding:0.3rem 0.75rem;border-radius:20px;font-size:0.8rem;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='var(--amarillo-bg)'" onmouseout="this.style.background='var(--blanco)'">${escaparHTML(a.nombre)}</span>
           `).join('')}
         </div>
       </div>
@@ -1647,7 +1695,7 @@ async function guardarAlumno(){
   const dias=[...document.querySelectorAll('.dia-check-label.checked')].map(l=>l.dataset.dia);
   const hpd=getDiaHorarios();
   const alumno={
-    id: editandoId||Date.now().toString(),
+    id: editandoId||crypto.randomUUID(),
     nombre,
     horario: horariosPorDiaToString(hpd),
     dias,
@@ -1682,6 +1730,13 @@ async function guardarAlumno(){
     toast('Alumno guardado y sincronizado ✓');
     cerrarModal('modal-alumno');
     renderTablaAlumnos();renderDashboard();
+    // B7: si el perfil de este alumno está abierto en pantalla, refrescarlo
+    // para que la card de stats (edad/peso/IMC/nutrición) muestre los datos
+    // recién guardados sin tener que salir y volver a entrar.
+    const perfilAbierto = document.getElementById('page-perfil');
+    if(perfilAbierto && perfilAbierto.classList.contains('active') && perfilAbierto.dataset.alumnoId === alumno.id){
+      verAlumno(alumno.id);
+    }
   } catch(e){ toast('Error al guardar'); }
   btn.innerHTML='Guardar alumno';btn.disabled=false;
 }
@@ -1694,6 +1749,7 @@ function pdBadge(estado){
 
 function verAlumno(id){
   const a=alumnos.find(x=>x.id===id); if(!a) return;
+  document.getElementById('page-perfil').dataset.alumnoId = id;
   const hpd=stringToHorariosPorDia(a.horario);
   const iniciales=a.nombre.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
 
@@ -1782,7 +1838,7 @@ function verAlumno(id){
   document.getElementById('perfil-stats-row').innerHTML=`
     <div class="pd-stat">
       <div class="pd-stat-label">Edad</div>
-      <div class="pd-stat-val ${edad?'':''}"> ${edad!==null?edad:'—'}</div>
+      <div class="pd-stat-val"> ${edad!==null?edad:'—'}</div>
       <div class="pd-stat-sub">años</div>
     </div>
     <div class="pd-stat">
@@ -2000,7 +2056,7 @@ function editarObjetivo(id,idx){
   const lista=getObjetivos(id);
   const contenedor=document.getElementById(`objetivo-${id}-${idx}`);
   contenedor.innerHTML=`
-    <input type="text" id="edit-objetivo-${idx}" value="${lista[idx]}" class="pd-input" style="flex:1;height:32px"/>
+    <input type="text" id="edit-objetivo-${idx}" value="${escaparHTML(lista[idx])}" class="pd-input" style="flex:1;height:32px"/>
     <button class="pd-btn pd-btn-primary" style="font-size:0.72rem" onclick="guardarEdicionObjetivo('${id}',${idx})">Guardar</button>
     <button class="pd-btn pd-btn-secondary" style="font-size:0.72rem" onclick="renderObjetivos('${id}')">×</button>
   `;
@@ -2076,7 +2132,7 @@ function editarMolestia(id,idx){
   const lista=getMolestias(id);
   const contenedor=document.getElementById(`molestia-${id}-${idx}`);
   contenedor.innerHTML=`
-    <input type="text" id="edit-molestia-${idx}" value="${lista[idx]}" class="pd-input" style="flex:1;height:32px"/>
+    <input type="text" id="edit-molestia-${idx}" value="${escaparHTML(lista[idx])}" class="pd-input" style="flex:1;height:32px"/>
     <button class="pd-btn pd-btn-primary" style="font-size:0.72rem" onclick="guardarEdicionMolestia('${id}',${idx})">Guardar</button>
     <button class="pd-btn pd-btn-secondary" style="font-size:0.72rem" onclick="renderMolestias('${id}')">×</button>
   `;
@@ -2158,7 +2214,7 @@ function getIngresosMes(mk){
   const cm=cobros[mk]||{};
   alumnos.filter(a=>a.estado==='activo').forEach(a=>{
     const c=cm[a.id];
-    if(c&&c.estado==='pagado') cuotas+=parseFloat(a.monto||0);
+    if(c&&c.estado==='pagado') cuotas+= (c.monto!==''&&c.monto!=null) ? parseFloat(c.monto) : parseFloat(a.monto||0);
   });
   // Bonos
   let bonos=0;
@@ -2292,7 +2348,7 @@ async function guardarGasto(){
   const monto=document.getElementById('g-monto').value;
   const desc=document.getElementById('g-desc').value.trim();
   if(!monto||!desc){toast('Completá todos los campos');return;}
-  gastos.push({id:Date.now().toString(),fecha:fecha.slice(0,7),desc,monto});
+  gastos.push({id:crypto.randomUUID(),fecha:fecha.slice(0,7),desc,monto});
   try{
     await guardarGastosEnSheets();
     toast('Gasto registrado ✓');
@@ -2401,7 +2457,7 @@ function renderNutri(){
         </div>
       </div>`;
     }).join('')}
-  </div>`;;
+  </div>`;
 }
 
 function abrirModalNutri(id=null){
@@ -2423,7 +2479,7 @@ async function guardarClienteNutri(){
   const nombre=document.getElementById('nc-nombre').value.trim();
   if(!nombre){toast('El nombre es obligatorio');return;}
   const cliente={
-    id:editandoNutriId||Date.now().toString(),
+    id:editandoNutriId||crypto.randomUUID(),
     nombre,
     telefono:document.getElementById('nc-telefono').value.trim(),
     estado:document.getElementById('nc-estado').value,
@@ -2452,31 +2508,40 @@ async function eliminarClienteNutri(id){
   catch(e){toast('Error al eliminar');}
 }
 
-async function registrarPagoNutri(mk,id){
-  const input=document.getElementById(`nutri-pago-${id}`);
-  const monto=input?input.value.trim():'';
+async function _registrarPagoNutriBase(mk,id,monto,renderFn){
   if(!monto||isNaN(monto)){toast('Ingresá un monto válido');return;}
   if(!cobrosNutri[mk]) cobrosNutri[mk]={};
   cobrosNutri[mk][id]={monto,fecha:new Date().toLocaleDateString('es-AR')};
-  try{await guardarCobrosNutriEnSheets();toast('Pago registrado ✓');renderNutri();}
+  try{await guardarCobrosNutriEnSheets();toast('Pago registrado ✓');renderFn();}
   catch(e){toast('Error al guardar');}
 }
+async function registrarPagoNutri(mk,id){
+  const input=document.getElementById(`nutri-pago-${id}`);
+  const monto=input?input.value.trim():'';
+  return _registrarPagoNutriBase(mk,id,monto,renderNutri);
+}
 
-async function editarPagoNutri(mk,id,valorActual){
+async function _editarPagoNutriBase(mk,id,valorActual,renderFn){
   const nuevo=prompt('Nuevo monto:',valorActual);
   // SEG-03: rechazar cancelación, no numérico y negativos
   if(nuevo===null) return;
   if(isNaN(nuevo)||nuevo.trim()===''||parseFloat(nuevo)<=0){toast('Ingresá un monto válido mayor a cero');return;}
   cobrosNutri[mk][id]={monto:nuevo,fecha:new Date().toLocaleDateString('es-AR')};
-  try{await guardarCobrosNutriEnSheets();toast('Pago actualizado ✓');renderNutri();}
+  try{await guardarCobrosNutriEnSheets();toast('Pago actualizado ✓');renderFn();}
   catch(e){toast('Error al guardar');}
 }
+async function editarPagoNutri(mk,id,valorActual){
+  return _editarPagoNutriBase(mk,id,valorActual,renderNutri);
+}
 
-async function eliminarPagoNutri(mk,id){
+async function _eliminarPagoNutriBase(mk,id,mensaje,renderFn){
   if(!confirm('¿Eliminar este pago?')) return;
   if(cobrosNutri[mk]) delete cobrosNutri[mk][id];
-  try{await guardarCobrosNutriEnSheets();toast('Pago eliminado');renderNutri();}
+  try{await guardarCobrosNutriEnSheets();toast(mensaje);renderFn();}
   catch(e){toast('Error al guardar');}
+}
+async function eliminarPagoNutri(mk,id){
+  return _eliminarPagoNutriBase(mk,id,'Pago eliminado',renderNutri);
 }
 
 // ── GOOGLE CALENDAR API ──
@@ -2590,56 +2655,6 @@ function imc_categoria(imc){
   return 'Obesidad';
 }
 
-async function guardarDatosPersonales(id){
-  const i=alumnos.findIndex(x=>x.id===id); if(i===-1) return;
-  alumnos[i].fechaNac=document.getElementById('a-fechaNac')?.value.trim()||alumnos[i].fechaNac||'';
-  alumnos[i].estatura=document.getElementById('a-estatura')?.value.trim()||alumnos[i].estatura||'';
-  alumnos[i].pesoInicial=document.getElementById('a-pesoInicial')?.value.trim()||alumnos[i].pesoInicial||'';
-  alumnos[i].pesoActual=document.getElementById('a-pesoActual')?.value.trim()||alumnos[i].pesoActual||'';
-  try{
-    await guardarEnSheets();
-    toast('Datos guardados ✓');
-    actualizarStatsRow(id);
-  }catch(e){toast('Error al guardar');}
-}
-
-function actualizarStatsRow(id){
-  const a=alumnos.find(x=>x.id===id); if(!a) return;
-  const edad=calcularEdad(a.fechaNac);
-  const imc=calcularIMC(a.pesoActual||a.pesoInicial, a.estatura);
-  const imcCat=imc_categoria(imc);
-  const pesoDiff=a.pesoInicial&&a.pesoActual?(parseFloat(a.pesoActual)-parseFloat(a.pesoInicial)):null;
-  const statsRow=document.getElementById('perfil-stats-row');
-  if(!statsRow) return;
-  statsRow.innerHTML=`
-    <div class="pd-stat">
-      <div class="pd-stat-label">Edad</div>
-      <div class="pd-stat-val">${edad!==null?edad:'—'}</div>
-      <div class="pd-stat-sub">años</div>
-    </div>
-    <div class="pd-stat">
-      <div class="pd-stat-label">Altura</div>
-      <div class="pd-stat-val">${a.estatura||'—'}</div>
-      <div class="pd-stat-sub">cm</div>
-    </div>
-    <div class="pd-stat">
-      <div class="pd-stat-label">Peso inicial</div>
-      <div class="pd-stat-val">${a.pesoInicial||'—'}</div>
-      <div class="pd-stat-sub">kg</div>
-    </div>
-    <div class="pd-stat">
-      <div class="pd-stat-label">Peso actual</div>
-      <div class="pd-stat-val verde">${a.pesoActual||'—'}</div>
-      <div class="pd-stat-sub">${pesoDiff!==null?(pesoDiff<=0?'':'+')+pesoDiff+' kg':'kg'}</div>
-    </div>
-    <div class="pd-stat">
-      <div class="pd-stat-label">IMC</div>
-      <div class="pd-stat-val ${imc?(parseFloat(imc)<25?'verde':'amber'):''}"> ${imc||'—'}</div>
-      <div class="pd-stat-sub">${imcCat||'sin datos'}</div>
-    </div>
-  `;
-}
-
 // ── NUTRICIÓN EN PERFIL ──
 function renderNutriPerfil(id){
   const a=alumnos.find(x=>x.id===id); if(!a) return;
@@ -2692,28 +2707,15 @@ async function toggleNutriAlumno(id, activo){
 async function registrarPagoNutriPerfil(id,mk){
   const input=document.getElementById('nutri-perfil-monto');
   const monto=input?input.value.trim():'';
-  if(!monto||isNaN(monto)){toast('Ingresá un monto válido');return;}
-  if(!cobrosNutri[mk]) cobrosNutri[mk]={};
-  cobrosNutri[mk][id]={monto,fecha:new Date().toLocaleDateString('es-AR')};
-  try{await guardarCobrosNutriEnSheets();toast('Pago registrado ✓');renderNutriPerfil(id);}
-  catch(e){toast('Error al guardar');}
+  return _registrarPagoNutriBase(mk,id,monto,()=>renderNutriPerfil(id));
 }
 
 async function editarPagoNutriPerfil(id,mk,valorActual){
-  const nuevo=prompt('Nuevo monto:',valorActual);
-  // SEG-03: rechazar cancelación, no numérico y negativos
-  if(nuevo===null) return;
-  if(isNaN(nuevo)||nuevo.trim()===''||parseFloat(nuevo)<=0){toast('Ingresá un monto válido mayor a cero');return;}
-  cobrosNutri[mk][id]={monto:nuevo,fecha:new Date().toLocaleDateString('es-AR')};
-  try{await guardarCobrosNutriEnSheets();toast('Pago actualizado ✓');renderNutriPerfil(id);}
-  catch(e){toast('Error al guardar');}
+  return _editarPagoNutriBase(mk,id,valorActual,()=>renderNutriPerfil(id));
 }
 
 async function eliminarPagoNutriPerfil(id,mk){
-  if(!confirm('¿Eliminar este pago?')) return;
-  if(cobrosNutri[mk]) delete cobrosNutri[mk][id];
-  try{await guardarCobrosNutriEnSheets();toast('Eliminado');renderNutriPerfil(id);}
-  catch(e){toast('Error al guardar');}
+  return _eliminarPagoNutriBase(mk,id,'Eliminado',()=>renderNutriPerfil(id));
 }
 
 // ── COBROS POR ALUMNO ──
@@ -2732,11 +2734,17 @@ function renderCobrosAlumno(id){
       estado:(cobros[m]&&cobros[m][id])?cobros[m][id].estado:'pendiente',
       fecha:(cobros[m]&&cobros[m][id])?cobros[m][id].fecha:'',
       bono:(cobros[m]&&cobros[m][id])?cobros[m][id].bono||'':'',
+      monto:(cobros[m]&&cobros[m][id])?cobros[m][id].monto||'':'',
     }))
     .sort((a,b)=>b.mes.localeCompare(a.mes));
   const pagados=historial.filter(m=>m.estado==='pagado').length;
   const pendientes=historial.filter(m=>m.estado==='pendiente').length;
-  const totalCobrado=pagados*monto;
+  // B6: suma el monto real congelado de cada pago (fallback al precio actual
+  // solo para pagos históricos previos a este cambio, que no lo tienen guardado)
+  // + los bonos, en vez de "meses pagados × precio actual".
+  const totalCobrado=historial
+    .filter(m=>m.estado==='pagado')
+    .reduce((acc,m)=>acc+((m.monto!==''&&m.monto!=null)?parseFloat(m.monto):monto)+(parseFloat(m.bono)||0),0);
   const ultimoPago=historial.find(m=>m.estado==='pagado');
   el.innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.75rem">
@@ -2776,54 +2784,41 @@ function renderCobrosAlumno(id){
   `;
 }
 
-async function marcarPagadoPerfil(alumnoId, mk){
+// Base compartida: cambia el estado de un cobro (pagado/pendiente) y re-renderiza
+// la vista que corresponda. Los 4 wrappers de abajo mantienen exactamente las
+// mismas firmas que ya usa el HTML (onclick), solo delegan acá.
+async function _marcarCobroEstado(mk, id, estado, renderFn){
   if(!cobros[mk]) cobros[mk]={};
-  const prev=cobros[mk][alumnoId]||{};
-  cobros[mk][alumnoId]={...prev,estado:'pagado',fecha:new Date().toLocaleDateString('es-AR')};
+  const prev=cobros[mk][id]||{};
+  if(estado==='pagado'){
+    const alumno=alumnos.find(x=>x.id===id);
+    cobros[mk][id]={...prev,estado:'pagado',fecha:new Date().toLocaleDateString('es-AR'),monto:alumno?alumno.monto:''};
+  } else {
+    cobros[mk][id]={...prev,estado:'pendiente',fecha:'',monto:''};
+  }
   try{
     await guardarCobrosEnSheets();
-    toast('Pago registrado ✓');
-    renderCobrosAlumno(alumnoId);
+    toast(estado==='pagado' ? 'Pago registrado ✓' : 'Marcado como pendiente');
+    renderFn();
     renderDashboard();
   }catch(e){toast('Error al guardar');}
 }
 
+async function marcarPagadoPerfil(alumnoId, mk){
+  return _marcarCobroEstado(mk, alumnoId, 'pagado', ()=>renderCobrosAlumno(alumnoId));
+}
+
 async function marcarPendientePerfil(alumnoId, mk){
-  if(cobros[mk]){
-    const prev=cobros[mk][alumnoId]||{};
-    cobros[mk][alumnoId]={...prev,estado:'pendiente',fecha:''};
-  }
-  try{
-    await guardarCobrosEnSheets();
-    toast('Marcado como pendiente');
-    renderCobrosAlumno(alumnoId);
-    renderDashboard();
-  }catch(e){toast('Error al guardar');}
+  return _marcarCobroEstado(mk, alumnoId, 'pendiente', ()=>renderCobrosAlumno(alumnoId));
 }
 
 // ── COBROS SECCIÓN ──
 async function marcarPagado(mk, id){
-  if(!cobros[mk]) cobros[mk]={};
-  const prev=cobros[mk][id]||{};
-  cobros[mk][id]={...prev,estado:'pagado',fecha:new Date().toLocaleDateString('es-AR')};
-  try{
-    await guardarCobrosEnSheets();
-    toast('Pago registrado ✓');
-    renderCobros();
-    renderDashboard();
-  }catch(e){toast('Error al guardar');}
+  return _marcarCobroEstado(mk, id, 'pagado', renderCobros);
 }
 
 async function marcarPendiente(mk, id){
-  if(!cobros[mk]) cobros[mk]={};
-  const prev=cobros[mk][id]||{};
-  cobros[mk][id]={...prev,estado:'pendiente',fecha:''};
-  try{
-    await guardarCobrosEnSheets();
-    toast('Marcado como pendiente');
-    renderCobros();
-    renderDashboard();
-  }catch(e){toast('Error al guardar');}
+  return _marcarCobroEstado(mk, id, 'pendiente', renderCobros);
 }
 
 // ── AGENDA ──
@@ -2932,7 +2927,7 @@ function renderHorariosQuick(hpd, dias){
   container.innerHTML=dias.map(dia=>`
     <div class="dia-horario-row">
       <label>${dia}</label>
-      <input type="text" id="aq-h-${dia}" placeholder="ej: 8:00 - 9:00" value="${hpd[dia]||''}"/>
+      <input type="text" id="aq-h-${dia}" placeholder="ej: 8:00 - 9:00" value="${escaparHTML(hpd[dia]||'')}"/>
     </div>
   `).join('');
 }
@@ -2943,7 +2938,7 @@ async function guardarQuickAgenda(){
   const hpd={};
   diasSeleccionados.forEach(dia=>{
     const inp=document.getElementById(`aq-h-${dia}`);
-    if(inp) hpd[dia]=inp.value.trim();
+    if(inp) hpd[dia]=inp.value.trim().replace(/\|/g,'');
   });
   alumnos[i].dias=diasSeleccionados;
   alumnos[i].horario=horariosPorDiaToString(hpd);
@@ -3136,7 +3131,7 @@ function renderDiaHorarios(horariosPorDia={}){
   lista.innerHTML=seleccionados.map(dia=>`
     <div class="dia-horario-row">
       <label>${dia}</label>
-      <input type="text" id="horario-${dia}" placeholder="ej: 8:00 - 9:00" value="${horariosPorDia[dia]||''}"/>
+      <input type="text" id="horario-${dia}" placeholder="ej: 8:00 - 9:00" value="${escaparHTML(horariosPorDia[dia]||'')}"/>
     </div>
   `).join('');
 }
@@ -3144,7 +3139,9 @@ function getDiaHorarios(){
   const result={};
   document.querySelectorAll('.dia-horario-row').forEach(row=>{
     const label=row.querySelector('label').textContent;
-    const val=row.querySelector('input').value.trim();
+    // B9: '|' es el separador interno de horariosPorDiaToString — si el texto
+    // libre lo contiene, corrompe el parseo. Se remueve por las dudas.
+    const val=row.querySelector('input').value.trim().replace(/\|/g,'');
     result[label]=val;
   });
   return result;
