@@ -1469,7 +1469,7 @@ async function guardarFilaAlumno(alumno){
   const i = alumnos.findIndex(x=>x.id===alumno.id);
   if(i===-1) throw new Error('Alumno no encontrado en el array local');
   const fila = i + 2; // fila 1 = encabezados, los datos arrancan en fila 2
-  await sheetsUpdate(`Alumnos!A${fila}:R${fila}`, [_alumnoAFila(alumno)]);
+  await sheetsUpdate(`Alumnos!A${fila}:S${fila}`, [_alumnoAFila(alumno)]);
 }
 
 async function agregarEntradaSeguimiento(alumnoId, texto, fechaISO){
