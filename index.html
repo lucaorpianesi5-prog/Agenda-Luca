@@ -895,6 +895,9 @@ const SHEET_ID    = '1mHE-llV4vVZqwS-_mKjOmse_sOGJJaeO81jT6wOsUSY';
 const CALENDAR_ID = '15630b30e4c24d0bc4266512653a57d019dfdeade6d10e5cc2aa59f963f68ac3@group.calendar.google.com';
 const SCOPES      = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar';
 const API_KEY     = 'AIzaSyCoSrMHlnLoj7SSOHD2_31YE7bvJhNVo4g';
+// S1: URL del Apps Script proxy para el portal público (ver portal-proxy.gs).
+// Reemplazar por la URL real que te da Google al desplegar (termina en /exec).
+const PORTAL_API_URL = 'https://script.google.com/macros/s/AKfycbyIS1jOg7mRmLwcBqIaiXBtl1yFxW1tyKmHdpPcWd5-VilVan7y2iEx_W164ieY_teU/exec';
 
 // CAL-07: Rangos de hojas centralizados — modificar aquí si cambia la estructura
 const RANGO = {
@@ -966,37 +969,22 @@ async function cargarPortalAlumno(id){
   el.style.display = 'block';
   el.innerHTML = '<div class="portal-loading">Cargando tu perfil...</div>';
   try {
-    const urlA = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent('Alumnos!A2:R1000')}?key=${API_KEY}`;
-    const urlS = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent('Seguimiento!A2:C10000')}?key=${API_KEY}`;
-    const urlAs = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(RANGO.ASISTENCIAS_READ)}?key=${API_KEY}`;
-    const [resA, resS, resAs] = await Promise.all([fetch(urlA), fetch(urlS), fetch(urlAs)]);
-    if(!resA.ok || !resS.ok) throw new Error('Error al leer datos');
-    const rowsA  = (await resA.json()).values  || [];
-    const rowsS  = (await resS.json()).values  || [];
-    const rowsAs = resAs.ok ? ((await resAs.json()).values || []) : [];
-
-    const r = rowsA.find(r => r[0] === id);
-    if(!r){ el.innerHTML = '<div class="portal-error">Perfil no encontrado.</div>'; return; }
+    const res = await fetch(`${PORTAL_API_URL}?alumno=${encodeURIComponent(id)}`);
+    if(!res.ok) throw new Error('Error al leer datos');
+    const data = await res.json();
+    if(data.error === 'not_found'){ el.innerHTML = '<div class="portal-error">Perfil no encontrado.</div>'; return; }
+    if(data.error) throw new Error(data.error);
 
     const a = {
-      id:           r[0]||'',
-      nombre:       r[1]||'',
-      horario:      r[2]||'',
-      dias:         r[3]?(r[3].split('|')):[],
-      frecuencia:   r[4]||'',
-      objetivos:    r[6]||'',
-      fechaNac:     r[10]||'',
-      estatura:     r[11]||'',
-      pesoInicial:  r[12]||'',
-      pesoActual:   r[13]||'',
-      tieneNutri:   r[15]||'no',
-      carpetaDrive: r[16]||'',
-      nutriDrive:   r[17]||'',
+      ...data.alumno,
+      dias: data.alumno.dias ? data.alumno.dias.split('|') : [],
     };
 
+    const rowsS  = data.seguimiento  || [];
+    const rowsAs = data.asistencias  || [];
+
     const entradas = rowsS
-      .filter(r => r[0] === id && r[1] && r[2])
-      .map(r => ({ fecha: r[1], texto: r[2] }))
+      .map(r => ({ fecha: r[0], texto: r[1] }))
       .sort((a,b) => {
         const toDate = s => { const [d,m,y]=s.split('/'); return new Date(`${y}-${m}-${d}`); };
         return toDate(b.fecha) - toDate(a.fecha);
@@ -1004,9 +992,9 @@ async function cargarPortalAlumno(id){
 
     // Racha de clases (asistencias efectivas) + contador de recuperaciones
     // Retrocompatible: filas viejas sin columna 'tipo' cuentan como 'asistencia'
-    const registrosAlumno = rowsAs.filter(r => r[0] === id && r[1]);
-    const racha = registrosAlumno.filter(r => !r[2] || r[2] === 'asistencia').length;
-    const recuperaciones = registrosAlumno.filter(r => r[2] === 'recuperacion').length;
+    const registrosAlumno = rowsAs;
+    const racha = registrosAlumno.filter(r => !r[1] || r[1] === 'asistencia').length;
+    const recuperaciones = registrosAlumno.filter(r => r[1] === 'recuperacion').length;
 
     const hpd = portalStringToHorarios(a.horario);
     const diasStr = a.dias.map(d => hpd[d] ? `${d} ${hpd[d]}` : d).join(' · ') || 'Sin días asignados';
@@ -1282,6 +1270,30 @@ async function sheetsClear(range){
   return r;
 }
 
+// B3: reemplaza el patrón clear()+update() (2 llamadas, no atómico) por una sola
+// llamada que sobrescribe todo el rango — filas nuevas + filas vacías de relleno
+// hasta el techo del rango. Si falla, no se pierde nada (la hoja queda como estaba).
+function _colLetrasAIndice(letras){
+  let n=0;
+  for(const ch of letras) n=n*26+(ch.charCodeAt(0)-64);
+  return n;
+}
+async function sheetsReplaceRange(range, values){
+  const m=range.match(/!([A-Z]+)(\d+):([A-Z]+)(\d+)/);
+  if(!m) throw new Error('Rango inválido para sheetsReplaceRange: '+range);
+  const [, colIni, filaIni, colFin, filaFin] = m;
+  const numCols = _colLetrasAIndice(colFin) - _colLetrasAIndice(colIni) + 1;
+  const totalFilas = (+filaFin) - (+filaIni) + 1;
+  const filaVacia = ()=>new Array(numCols).fill('');
+  const relleno = values.slice(0, totalFilas).map(fila=>{
+    const f = fila.slice(0, numCols);
+    while(f.length < numCols) f.push('');
+    return f;
+  });
+  while(relleno.length < totalFilas) relleno.push(filaVacia());
+  return sheetsUpdate(range, relleno);
+}
+
 // ── CARGAR DATOS ──
 async function cargarDatos(){
   try {
@@ -1381,16 +1393,13 @@ async function cargarDatos(){
 
 // ── GUARDAR ALUMNO EN SHEETS ──
 async function guardarEnSheets(){
-  await sheetsClear(RANGO.ALUMNOS_WRITE);
-  if(alumnos.length){
-    const values=alumnos.map(a=>[
-      a.id,a.nombre,a.horario,a.dias.join('|'),a.frecuencia,a.monto,
-      a.objetivos,a.notas,a.estado,a.telefono||'',
-      a.fechaNac||'',a.estatura||'',a.pesoInicial||'',a.pesoActual||'',
-      a.historialFis||'',a.tieneNutri||'no',a.carpetaDrive||'',a.nutriDrive||''
-    ]);
-    await sheetsUpdate(RANGO.ALUMNOS_START,values);
-  }
+  const values=alumnos.map(a=>[
+    a.id,a.nombre,a.horario,a.dias.join('|'),a.frecuencia,a.monto,
+    a.objetivos,a.notas,a.estado,a.telefono||'',
+    a.fechaNac||'',a.estatura||'',a.pesoInicial||'',a.pesoActual||'',
+    a.historialFis||'',a.tieneNutri||'no',a.carpetaDrive||'',a.nutriDrive||''
+  ]);
+  await sheetsReplaceRange(RANGO.ALUMNOS_WRITE, values);
 }
 
 async function agregarEntradaSeguimiento(alumnoId, texto, fechaISO){
@@ -1405,14 +1414,13 @@ async function agregarEntradaSeguimiento(alumnoId, texto, fechaISO){
 }
 
 async function guardarCobrosEnSheets(){
-  await sheetsClear(RANGO.COBROS_WRITE);
   const values=[];
   Object.entries(cobros).forEach(([mk,mes])=>{
     Object.entries(mes).forEach(([aid,c])=>{
       values.push([mk,aid,c.estado,c.fecha||'',c.bono||'',c.fechaBono||'']);
     });
   });
-  if(values.length) await sheetsUpdate(RANGO.COBROS_START,values);
+  await sheetsReplaceRange(RANGO.COBROS_WRITE, values);
 }
 
 // ── NAVEGACIÓN ──
@@ -1905,12 +1913,11 @@ async function eliminarEntrada(id,idx){
 }
 
 async function guardarSeguimientoCompleto(){
-  await sheetsClear(RANGO.SEGUIMIENTO_WRITE);
   const values=[];
   Object.entries(seguimiento).forEach(([aid,entradas])=>{
     entradas.forEach(e=>values.push([aid,e.fecha,e.texto]));
   });
-  if(values.length) await sheetsUpdate(RANGO.SEGUIMIENTO_START,values);
+  await sheetsReplaceRange(RANGO.SEGUIMIENTO_WRITE, values);
 }
 
 async function agregarEntradaPerfil(id){
@@ -2095,16 +2102,12 @@ async function sincronizarTodosCalendar(){
 
 // ── FINANZAS ──
 async function guardarGastosEnSheets(){
-  await sheetsClear(RANGO.GASTOS_WRITE);
-  if(gastos.length){
-    const values=gastos.map(g=>[g.id,g.fecha,g.desc,g.monto]);
-    await sheetsUpdate(RANGO.GASTOS_START,values);
-  }
+  const values=gastos.map(g=>[g.id,g.fecha,g.desc,g.monto]);
+  await sheetsReplaceRange(RANGO.GASTOS_WRITE, values);
 }
 async function guardarAhorrosEnSheets(){
-  await sheetsClear(RANGO.AHORROS_WRITE);
   const values=Object.entries(ahorros).map(([mk,v])=>[mk,v]);
-  if(values.length) await sheetsUpdate(RANGO.AHORROS_START,values);
+  await sheetsReplaceRange(RANGO.AHORROS_WRITE, values);
 }
 
 function initFinAnios(){
@@ -2274,21 +2277,17 @@ async function eliminarGasto(id){
 
 // ── NUTRICIÓN SHEETS ──
 async function guardarClientesNutriEnSheets(){
-  await sheetsClear(RANGO.NUTRICION_WRITE);
-  if(clientesNutri.length){
-    const values=clientesNutri.map(c=>[c.id,c.nombre,c.telefono||'',c.estado,c.notas||'']);
-    await sheetsUpdate(RANGO.NUTRICION_START,values);
-  }
+  const values=clientesNutri.map(c=>[c.id,c.nombre,c.telefono||'',c.estado,c.notas||'']);
+  await sheetsReplaceRange(RANGO.NUTRICION_WRITE, values);
 }
 async function guardarCobrosNutriEnSheets(){
-  await sheetsClear(RANGO.NUTRI_COBROS_WRITE);
   const values=[];
   Object.entries(cobrosNutri).forEach(([mk,mes])=>{
     Object.entries(mes).forEach(([cid,p])=>{
       values.push([mk,cid,p.monto||'',p.fecha||'']);
     });
   });
-  if(values.length) await sheetsUpdate(RANGO.NUTRI_COBROS_START,values);
+  await sheetsReplaceRange(RANGO.NUTRI_COBROS_WRITE, values);
 }
 
 // ── NUTRICIÓN RENDER ──
