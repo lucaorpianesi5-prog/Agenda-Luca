@@ -1255,25 +1255,31 @@ async function sheetsGet(range){
 
 async function sheetsUpdate(range, values){
   const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeRange(range)}?valueInputOption=RAW`;
-  await fetchConRenovacion(url,{
+  const r=await fetchConRenovacion(url,{
     method:'PUT',
     headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},
     body:JSON.stringify({range,majorDimension:'ROWS',values})
   });
+  if(!r.ok) throw new Error('Error guardando en Sheets');
+  return r;
 }
 
 async function sheetsAppend(range, values){
   const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeRange(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
-  await fetchConRenovacion(url,{
+  const r=await fetchConRenovacion(url,{
     method:'POST',
     headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},
     body:JSON.stringify({range,majorDimension:'ROWS',values})
   });
+  if(!r.ok) throw new Error('Error agregando fila en Sheets');
+  return r;
 }
 
 async function sheetsClear(range){
   const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeRange(range)}:clear`;
-  await fetchConRenovacion(url,{method:'POST',headers:{Authorization:'Bearer '+accessToken}});
+  const r=await fetchConRenovacion(url,{method:'POST',headers:{Authorization:'Bearer '+accessToken}});
+  if(!r.ok) throw new Error('Error limpiando rango en Sheets');
+  return r;
 }
 
 // ── CARGAR DATOS ──
@@ -1706,12 +1712,16 @@ function verAlumno(id){
   document.getElementById('perfil-btn-editar').onclick=()=>abrirModalAlumno(id);
   document.getElementById('perfil-btn-eliminar').onclick=async()=>{
     if(confirm('¿Eliminar a '+a.nombre+'?')){
-      await eliminarEventosAlumno(id);
-      alumnos=alumnos.filter(x=>x.id!==id);
-      await guardarEnSheets();
-      toast('Alumno eliminado');
-      showPage('alumnos',null);
-      renderTablaAlumnos();renderDashboard();
+      try{
+        await eliminarEventosAlumno(id);
+        alumnos=alumnos.filter(x=>x.id!==id);
+        await guardarEnSheets();
+        toast('Alumno eliminado');
+        showPage('alumnos',null);
+        renderTablaAlumnos();renderDashboard();
+      }catch(e){
+        toast('Error al eliminar el alumno');
+      }
     }
   };
   const asistenciaBtn=document.getElementById('perfil-btn-asistencia');
@@ -3041,9 +3051,13 @@ async function registrarBono(mk,id){
   if(!cobros[mk][id]) cobros[mk][id]={estado:'pendiente',fecha:''};
   cobros[mk][id].bono=monto;
   cobros[mk][id].fechaBono=new Date().toLocaleDateString('es-AR');
-  await guardarCobrosEnSheets();
-  toast('Bono registrado ✓');
-  renderCobros();renderDashboard();
+  try{
+    await guardarCobrosEnSheets();
+    toast('Bono registrado ✓');
+    renderCobros();renderDashboard();
+  }catch(e){
+    toast('Error al guardar el bono');
+  }
 }
 
 async function editarBono(mk,id,valorActual){
@@ -3053,18 +3067,26 @@ async function editarBono(mk,id,valorActual){
   if(isNaN(nuevo)||nuevo.trim()===''||parseFloat(nuevo)<=0){toast('Ingresá un monto válido mayor a cero');return;}
   cobros[mk][id].bono=nuevo;
   cobros[mk][id].fechaBono=new Date().toLocaleDateString('es-AR');
-  await guardarCobrosEnSheets();
-  toast('Bono actualizado ✓');
-  renderCobros();renderDashboard();
+  try{
+    await guardarCobrosEnSheets();
+    toast('Bono actualizado ✓');
+    renderCobros();renderDashboard();
+  }catch(e){
+    toast('Error al actualizar el bono');
+  }
 }
 
 async function eliminarBono(mk,id){
   if(!confirm('¿Eliminar el bono registrado?')) return;
   cobros[mk][id].bono='';
   cobros[mk][id].fechaBono='';
-  await guardarCobrosEnSheets();
-  toast('Bono eliminado');
-  renderCobros();renderDashboard();
+  try{
+    await guardarCobrosEnSheets();
+    toast('Bono eliminado');
+    renderCobros();renderDashboard();
+  }catch(e){
+    toast('Error al eliminar el bono');
+  }
 }
 
 // ── MODAL ──
